@@ -33,6 +33,25 @@ namespace ESP8266ThingSpeak {
         return result
     }
 
+    // wait for certain response from ESP8266
+    function waitForDataResponse(): boolean {
+        let serial_str: string = ""
+        let result: string = ""
+        let time: number = input.runningTime()
+        while (true) {
+            serial_str += serial.readString()
+            if (serial_str.length > 200) serial_str = serial_str.substr(serial_str.length - 200)
+            if (serial_str.includes("OK") || serial_str.includes("ALREADY CONNECTED")) {
+                result = serial_str
+                break
+            } else if (serial_str.includes("ERROR") || serial_str.includes("SEND FAIL")) {
+                break
+            }
+            if (input.runningTime() - time > 30000) break
+        }
+        return result
+    }
+
     /**
     * Initialize ESP8266 module and connect it to Wifi router
     */
@@ -78,6 +97,30 @@ namespace ESP8266ThingSpeak {
                 basic.pause(100)
             }
         }
+    }
+
+  /**
+   * Connect to ThingSpeak and retrieve data
+   */
+    //% block="Retrieve data from ThingSpeak|URL/IP = %ip|Read API key = %read_api_key|Channel = %channel|Field = %n"
+    //% ip.defl=api.thingspeak.com
+    //% read_api_key.defl=your_read_api_key
+  export function readLastEntryFromThingSpeakChannel(ip: string, read_api_key: string, channel: string, n: number) {
+        let result: string = ""
+        if (wifi_connected && read_api_key != "" && channel != "") {
+            thingspeak_connected = false
+            sendAT("AT+CIPSTART=\"TCP\",\"" + ip + "\",80", 0) // connect to website server
+            thingspeak_connected = waitResponse()
+            basic.pause(100)
+            if (thingspeak_connected) {
+              let str: string = "GET /channels/" + channel + "/fields/" + n + "/last.txt?api_key=" + read_api_key
+              sendAT("AT+CIPSEND=" + (str.length + 2))
+              sendAT(str, 0) // upload data
+              result = waitForDataResponse()
+              basic.pause(100)
+            }
+        }
+        return result
     }
 
     /**
